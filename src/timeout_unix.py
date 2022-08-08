@@ -39,6 +39,10 @@ def execute(command, max_time=1, globals_var={}):
 
 @contextmanager
 def timeout(seconds):
+    if seconds < 1:
+        seconds = 1
+    else:
+        seconds = int(seconds)
 
     def signal_handler(signum, frame):
         raise TimeoutException("temps dépassé (" + str(seconds) + "s)")

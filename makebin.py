@@ -144,9 +144,9 @@ PyInstaller.__main__.run([
 ])
 
 os.remove("view.spec")
-if config["DEFAULT"]["platform"] == "Windows":
+try:
     os.replace("dist/view.exe", "ITCheck.exe")
-else:
+except FileNotFoundError:
     os.replace("dist/view", "ITCheck")
 os.removedirs("dist")
 
