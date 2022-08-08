@@ -2,13 +2,12 @@ class Session:
     """
     Sujet du TP contenant les questions et tests à effectuer
     """
-    def __init__(self, name, module=[]):
+    def __init__(self, name):
         """
         name : nom du sujet de TP
         module : liste des noms des modules à importer pour les tests
         """
         self.name = name
-        self.module = module
         # Liste des questions
         self.list_questions = []
 
@@ -33,23 +32,33 @@ class Session:
         self.list_questions.append(q)
 
     def add_test(self, command, result, max_time=1, point=1,
-                 level="critic", hidden=0, custom_var={}, question_id=-1):
+                 level="critic", hidden=0, strict=True, custom_var={},
+                 question_id=-1):
         """
         command : nom de l'instruction à executer pour le test
         result : le résultat attendu. Cela peut être une instruction
         max_time : temps maximal d'execution du test en seconde
         point : nombre de point que rapporte le test en cas de succès
-        level : le niveau de criticité du test (fatal, critic, error, warning)
-            fatal : on arrête les tests et on met 0 à la question
+        level : le niveau de criticité du test : fatal, critic, error,
+                                                 warning, info
+            fatal : en cas d'échec on arrête les tests, on met 0 à la question
             critic : le test ne rapporte aucun point et on continue les tests
+                     Une pénalité de 25% du barème de la question est appliquée
                      En cas d'erreur d'execution on met 0 à la question
                      et on arrète les tests
             error : le test ne rapporte aucun point et on continue les tests
-            warning : le test n'enlève pas de point en cas d'échec
+                    En cas d'erreur d'execution on met 0 à la question
+                     et on arrète les tests
+            warning : le test ne rapporte aucun point et on continue les tests
+            info : il n'y a pas de résultat attendu et pas de points.
+                   Utile pour voir le comportement d'une fonction
+                   sur des cas exotiques
         hidden : détermine si le test doit être caché
             0 : le test et le résultat attendu sont affichés
             1 : seul le résultat attendu est affiché
             2 : seul le résultat obtenu est affiché (utile pour les variables)
+        strict : détermine si le test doit être strict sur les types
+                 Si True le test vérifiera aussi le type du résultat
         custom_var : disctionnaire contenant des variables personalisées
                      (par ex des fonctions) pour effectuer le test.
                      La clef est le nomn de la variable et la valeur sa def
@@ -61,7 +70,8 @@ class Session:
         else:
             i = self.get_number_questions()-1
         self.list_questions[i].add_test(command, result, max_time,
-                                        point, level, hidden, custom_var)
+                                        point, level, hidden, strict,
+                                        custom_var)
 
     def get_total_scale(self):
         """ Total de points du sujet """
@@ -74,6 +84,14 @@ class Session:
     def get_number_tests(self):
         """ Nombre total de tests """
         return sum([q.get_number_tests() for q in self.list_questions])
+
+    def get_max_numer_tests(self):
+        return max([q.get_number_tests() for q in self.list_questions])
+
+    def get_number_tests_without_info(self):
+        """ Nombre total de tests """
+        L = [q.get_number_tests_without_info() for q in self.list_questions]
+        return sum(L)
 
     def get_question_byid(self, id):
         """ Renvoie la question numéro id """
@@ -106,29 +124,38 @@ class Question:
         self.list_tests = []
 
     def add_test(self, command, result, max_time=1, point=1,
-                 level="critic", hidden=0, custom_var={}):
+                 level="critic", hidden=0, strict=True, custom_var={}):
         """
         command : nom de l'instruction à executer pour le test
         result : le résultat attendu
         max_time : temps maximal d'execution du test en seconde
         point : nombre de point que rapporte le test en cas de succès
-        level : le niveau de criticité du test (fatal, critic, error, warning)
-            fatal : on arrête les tests et on met 0 à la question
+        level : le niveau de criticité du test : fatal, critic, error,
+                                                 warning, info
+            fatal : en cas d'échec on arrête les tests, on met 0 à la question
             critic : le test ne rapporte aucun point et on continue les tests
+                     Une pénalité de 25% du barème de la question est appliquée
                      En cas d'erreur d'execution on met 0 à la question
                      et on arrète les tests
             error : le test ne rapporte aucun point et on continue les tests
-            warning : le test n'enlève pas de point en cas d'échec
+                    En cas d'erreur d'execution on met 0 à la question
+                     et on arrète les tests
+            warning : le test ne rapporte aucun point et on continue les tests
+            info : il n'y a pas de résultat attendu et pas de points.
+                   Utile pour voir le comportement d'une fonction
+                   sur des cas exotiques
         hidden : détermine si le test doit être caché
             0 : le test et le résultat attendu sont affichés
             1 : seul le résultat attendu est affiché
             2 : seul le résultat obtenu est affiché (utile pour les variables)
+        strict : détermine si le test doit être strict sur les types
+                 Si True le test vérifiera aussi le type du résultat
         custom_var : disctionnaire contenant des variables personalisées
                      (par ex des fonctions) pour effectuer le test.
                      La clef est le nomn de la variable et la valeur sa def
         """
         t = Test(self.func_name, command, result, max_time, point,
-                 level, hidden, custom_var)
+                 level, hidden, strict, custom_var)
         self.list_tests.append(t)
 
     def get_total_points_test(self):
@@ -143,6 +170,10 @@ class Question:
     def get_number_tests(self):
         """ Nombre total de test à la question """
         return len(self.list_tests)
+
+    def get_number_tests_without_info(self):
+        """ Nombre total de test à la question """
+        return len([t for t in self.list_tests if t.get_level() != "info"])
 
     def get_name(self):
         if self.name != "":
@@ -164,24 +195,33 @@ class Test:
     Test sur une fonction définie par une question
     """
     def __init__(self, func_name, command, result, max_time,
-                 point, level, hidden, custom_var):
+                 point, level, hidden, strict, custom_var):
         """
         func_name : nom de la fonction ou variable testée
         command : nom de l'instruction à executer pour le test
         result : le résultat attendu (peut être une instruction)
         max_time : temps maximal d'execution du test en seconde
         point : nombre de point que rapporte le test en cas de succès
-        level : le niveau de criticité du test (fatal, critic, error, warning)
-            fatal : on arrête les tests et on met 0 à la question
+        level : le niveau de criticité du test : fatal, critic, error,
+                                                 warning, info
+            fatal : en cas d'échec on arrête les tests, on met 0 à la question
             critic : le test ne rapporte aucun point et on continue les tests
+                     Une pénalité de 25% du barème de la question est appliquée
                      En cas d'erreur d'execution on met 0 à la question
                      et on arrète les tests
             error : le test ne rapporte aucun point et on continue les tests
-            warning : le test n'enlève pas de point en cas d'échec
+                    En cas d'erreur d'execution on met 0 à la question
+                     et on arrète les tests
+            warning : le test ne rapporte aucun point et on continue les tests
+            info : il n'y a pas de résultat attendu et pas de points.
+                   Utile pour voir le comportement d'une fonction
+                   sur des cas exotiques
         hidden : détermine si le test doit être caché
             0 : le test et le résultat attendu sont affichés
             1 : seul le résultat attendu est affiché
             2 : seul le résultat obtenu est affiché (utile pour les variables)
+        strict : détermine si le test doit être strict sur les types
+                 Si True le test vérifiera aussi le type du résultat
         custom_var : disctionnaire contenant des variables personalisées
                      (par ex des fonctions) pour effectuer le test.
                      La clef est le nomn de la variable et la valeur sa def
@@ -193,7 +233,10 @@ class Test:
         self.point = point
         self.level = level
         self.hidden = hidden
+        self.strict = strict
         self.custom_var = custom_var
+        if level == "info":
+            self.point = 0
 
     def show_command(self):
         return self.command
@@ -223,3 +266,6 @@ class Test:
 
     def get_custom_var(self):
         return self.custom_var
+
+    def get_strict(self):
+        return self.strict

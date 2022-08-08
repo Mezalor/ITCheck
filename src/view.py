@@ -1,6 +1,7 @@
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog as fd
+from tkinter import font
 import traceback
 
 import config as conf
@@ -62,7 +63,7 @@ tk.Label(tkf_results, textvariable=tks_success_tests,
          font=("", 12, "bold")).grid(column=1, row=2, sticky="e", padx=5)
 tk.Label(tkf_results, text="/",
          font=("", 12, "bold")).grid(column=2, row=2)
-tk.Label(tkf_results, text=conf.session.get_number_tests(),
+tk.Label(tkf_results, text=conf.session.get_number_tests_without_info(),
          font=("", 12, "bold")).grid(column=3, row=2, sticky="w", padx=5)
 
 tkf_results.pack(pady=15)
@@ -129,28 +130,93 @@ tkf_question_info.pack()
 # Tableau listant les résultats des tests
 tkf_test_table = tk.Frame(tk_root)
 
+tk.Label(tkf_test_table, text="N°").grid(column=0, row=0)
+tk.Label(tkf_test_table, text="Test").grid(column=1, row=0)
+tk.Label(tkf_test_table, text="Résultat attendu").grid(column=2, row=0)
+tk.Label(tkf_test_table, text="Résultat obtenu").grid(column=3, row=0)
+
+max_t = conf.session.get_max_numer_tests()
+# Liste des numéros des tests
+tks_nbt = [None for _ in range(max_t)]
+tke_nbt = [None for _ in range(max_t)]
+# Liste des commande du test
+tks_ct = [None for _ in range(max_t)]
+tke_ct = [None for _ in range(max_t)]
+# Liste des resultats attendus du test
+tks_ex = [None for _ in range(max_t)]
+tke_ex = [None for _ in range(max_t)]
+# Liste des resultats obtenus du test
+tks_ob = [None for _ in range(max_t)]
+tke_ob = [None for _ in range(max_t)]
+
+for test_id in range(max_t):
+    # Numéro du test
+    tks_nbt[test_id] = tk.StringVar(tkf_test_table, value=str(test_id+1))
+    tke_nbt[test_id] = tk.Entry(tkf_test_table, textvariable=tks_nbt[test_id],
+                                justify="center", width=2, state=tk.DISABLED)
+    tke_nbt[test_id].grid(column=0, row=test_id+1, sticky='ew')
+
+    # Commande du test
+    tks_ct[test_id] = tk.StringVar(tkf_test_table)
+    tke_ct[test_id] = tk.Entry(tkf_test_table, textvariable=tks_ct[test_id])
+    tke_ct[test_id].grid(column=1, row=test_id+1, sticky='ew')
+
+    # Résultat attendu du test
+    tks_ex[test_id] = tk.StringVar(tkf_test_table)
+    tke_ex[test_id] = tk.Entry(tkf_test_table, textvariable=tks_ex[test_id])
+    tke_ex[test_id].grid(column=2, row=test_id+1, sticky='ew')
+
+    # Résultat obtenu du test
+    tks_ob[test_id] = tk.StringVar(tkf_test_table)
+    tke_ob[test_id] = tk.Entry(tkf_test_table, textvariable=tks_ob[test_id])
+    tke_ob[test_id].grid(column=3, row=test_id+1, sticky='ew')
+
 
 # Fenetre pop-up d'information sur les commandes / variable / exception
-def info_command(test):
-    tk_dialog = tk.Toplevel(tk_root)
-    tk_dialog.title("Information Test")
-    tk_dialog.geometry("500x300")
+def info_popup(info_type, data, stdout=""):
+    title = {"com": "Information sur le test",
+             "val": "Information sur la valeur",
+             "err": "Information sur l'erreur",
+             "std": "Affichage de la sortie (stdout)"}
 
-    tk.Label(tk_dialog, text="Information sur le test",
+    tk_dialog = tk.Toplevel(tk_root)
+    tk_dialog.geometry("600x300")
+
+    tks_popup_title = tk.StringVar(tk_dialog, value=title[info_type])
+    tk.Label(tk_dialog, textvariable=tks_popup_title,
              font=("", 13, "bold")).pack(pady=10)
 
     tkt_info = tk.Text(tk_dialog, bg="white", height=5)
-    tkt_info.insert("1.0", test.show_command())
+    if info_type == "com":
+        tkt_info.insert("1.0", data.show_command())
+    elif info_type == "val":
+        type_info = "Type : " + str(type(data)) + "\n"
+        tkt_info.insert("1.0", type_info)
+        value_info = "Valeur : " + str(data)
+        tkt_info.insert("2.0", value_info)
+    elif info_type == "err":
+        try:
+            infos_exception = ''.join(traceback.format_exception(
+                etype=type(data), value=data, tb=data.__traceback__, limit=0))
+        except TypeError:
+            infos_exception = ''.join(traceback.format_exception(data,
+                                                                 limit=0))
+        tkt_info.insert("1.0", infos_exception)
+    elif info_type == "std":
+        tkt_info.insert("1.0", data)
+
     tkt_info.config(state="disable")
     tkt_info.pack(expand=True, fill="both", padx=5, pady=5)
 
     def copy_selection():
         tk_dialog.clipboard_clear()
         tk_dialog.clipboard_append(tkt_info.selection_get())
+        tk_dialog.update()
 
     def copy_all():
         tk_dialog.clipboard_clear()
         tk_dialog.clipboard_append(tkt_info.get("1.0", tk.END))
+        tk_dialog.update()
 
     tkf_button_select = tk.Frame(tk_dialog)
     tk.Button(tkf_button_select, text="Copier la sélection",
@@ -159,183 +225,160 @@ def info_command(test):
     tk.Button(tkf_button_select, text="Tout copier",
               command=copy_all).pack(side=tk.LEFT, padx=10)
 
+    def switch_display():
+        if tks_popup_title.get() == title["val"]:
+            tks_popup_title.set(title["std"])
+            tkt_info.config(state="normal")
+            tkt_info.delete(1.0, tk.END)
+            tkt_info.insert("1.0", stdout)
+            tkt_info.config(state="disable")
+            tks_display.set("Affichage de la valeur")
+
+        elif tks_popup_title.get() == title["std"]:
+            tks_popup_title.set(title["val"])
+            tkt_info.config(state="normal")
+            tkt_info.delete(1.0, tk.END)
+            type_info = "Type : " + str(type(data)) + "\n"
+            tkt_info.insert("1.0", type_info)
+            value_info = "Valeur : " + str(data)
+            tkt_info.insert("2.0", value_info)
+            tkt_info.config(state="disable")
+            tks_display.set("Affichage de la sortie (stdout)")
+
+    if info_type == "val" and stdout != "":
+        tks_display = tk.StringVar(tkf_button_select)
+        tkb_display = tk.Button(tkf_button_select, textvariable=tks_display,
+                                command=switch_display)
+        tkb_display.pack(side=tk.LEFT, padx=10)
+        tks_display.set("Affichage de la sortie (stdout)")
+
     tkf_button_select.pack(pady=10, padx=10)
 
     tk_dialog.wait_visibility()
     tk_dialog.grab_set()
+
+
+def info_command(test):
+    info_popup("com", test)
 
 
 def info_value(value):
-    tk_dialog = tk.Toplevel(tk_root)
-    tk_dialog.title("Information Valeur")
-    tk_dialog.geometry("500x300")
-
-    tk.Label(tk_dialog, text="Information sur la valeur",
-             font=("", 13, "bold"), pady=10).pack()
-
-    tkt_info = tk.Text(tk_dialog, bg="white", height=5)
-    type_info = "Type : " + str(type(value)) + "\n"
-    tkt_info.insert("1.0", type_info)
-    value_info = "Valeur : " + str(value)
-    tkt_info.insert("2.0", value_info)
-    tkt_info.config(state="disable")
-    tkt_info.pack(expand=True, fill="both", padx=5, pady=5)
-
-    def copy_selection():
-        tk_dialog.clipboard_clear()
-        tk_dialog.clipboard_append(tkt_info.selection_get())
-
-    def copy_all():
-        tk_dialog.clipboard_clear()
-        tk_dialog.clipboard_append(tkt_info.get("1.0", tk.END))
-
-    tkf_button_select = tk.Frame(tk_dialog)
-    tk.Button(tkf_button_select, text="Copier la sélection",
-              command=copy_selection).pack(
-                  side=tk.LEFT, padx=10)
-    tk.Button(tkf_button_select, text="Tout copier",
-              command=copy_all).pack(side=tk.LEFT, padx=10)
-
-    tkf_button_select.pack(pady=10, padx=10)
-
-    tk_dialog.wait_visibility()
-    tk_dialog.grab_set()
+    if isinstance(value, tuple):
+        info_popup("val", value[0], value[1])
+    else:
+        info_popup("val", value)
 
 
 def info_exception(err):
-    tk_dialog = tk.Toplevel(tk_root)
-    tk_dialog.title("Information erreur")
-    tk_dialog.geometry("500x300")
+    info_popup("err", err)
 
-    tk.Label(tk_dialog, text="Information sur l'erreur",
-             font=("", 13, "bold"), pady=10).pack()
 
-    infos_exception = ''.join(traceback.format_exception(
-        etype=type(err), value=err, tb=err.__traceback__, limit=0))
-
-    tkt_info = tk.Text(tk_dialog, bg="white", height=5)
-    tkt_info.insert("1.0", infos_exception)
-    tkt_info.config(state="disable")
-    tkt_info.pack(expand=True, fill="both", padx=5, pady=5)
-
-    def copy_selection():
-        tk_dialog.clipboard_clear()
-        tk_dialog.clipboard_append(tkt_info.selection_get())
-
-    def copy_all():
-        tk_dialog.clipboard_clear()
-        tk_dialog.clipboard_append(tkt_info.get("1.0", tk.END))
-
-    tkf_button_select = tk.Frame(tk_dialog)
-    tk.Button(tkf_button_select, text="Copier la sélection",
-              command=copy_selection).pack(
-                  side=tk.LEFT, padx=10)
-    tk.Button(tkf_button_select, text="Tout copier",
-              command=copy_all).pack(side=tk.LEFT, padx=10)
-
-    tkf_button_select.pack(pady=10, padx=10)
-
-    tk_dialog.wait_visibility()
-    tk_dialog.grab_set()
+def info_std(std):
+    info_popup("std", std)
 
 
 def show_tests(question_id):
     """ Affichage du tableau des tests """
-    global tkf_test_table
-
-    for widget in tkf_test_table.winfo_children():
-        widget.destroy()
-
-    tk.Label(tkf_test_table, text="N°").grid(column=0, row=0)
-    tk.Label(tkf_test_table, text="Test").grid(column=1, row=0)
-    tk.Label(tkf_test_table, text="Résultat attendu").grid(column=2, row=0)
-    tk.Label(tkf_test_table, text="Résultat obtenu").grid(column=3, row=0)
-
     question = conf.session.get_question_byid(question_id)
 
     for test_id in range(question.get_number_tests()):
+        tke_nbt[test_id].grid()
+        tke_ct[test_id].grid()
+        tke_ex[test_id].grid()
+        tke_ob[test_id].grid()
+
         test = question.get_test_byid(test_id)
 
-        if not conf.work.is_answered(question_id):
+        if not conf.work.get_enabled_result(question_id, test_id):
             test_color = "#DADADA"
+        elif test.get_level() == "info":
+            test_color = "#AFFFFA"
         elif conf.work.is_test_success(question_id, test_id):
-            test_color = "green"
-        elif test.get_level() == "warning":
+            if conf.work.get_std_result(question_id, test_id) != "":
+                test_color = "#86FF86"
+            else:
+                test_color = "green"
+        elif conf.work.is_test_fail_type(question_id, test_id):
             test_color = "yellow"
         else:
             test_color = "red"
 
-        # Numéro du test
-        s = tk.StringVar(tkf_test_table, value=str(test_id+1))
-        tk.Entry(tkf_test_table, textvariable=s, justify="center", width=2,
-                 state=tk.DISABLED).grid(column=0, row=test_id+1, sticky='ew')
-
         # Commande du test
-        s = tk.StringVar(tkf_test_table)
-        tke_command_test = tk.Entry(tkf_test_table, textvariable=s)
-        tke_command_test.grid(column=1, row=test_id+1, sticky='ew')
-
         if test.get_hidden() == 0:
-            s.set(test.show_command())
-            tke_command_test.config(
+            tks_ct[test_id].set(test.show_command())
+            tke_ct[test_id].config(
                 state="readonly", readonlybackground=test_color,
-                font=("Consolas", 10, ""), cursor="hand2")
-            tke_command_test.bind("<Button-1>",
-                                  lambda e, test=test: info_command(test))
+                font=("Consolas", 10, ""), cursor="hand2", justify="left")
+            tke_ct[test_id].bind("<Button-1>",
+                                 lambda e, test=test: info_command(test))
         else:
-            s.set("caché")
-            tke_command_test.config(
+            tks_ct[test_id].set("caché")
+            tke_ct[test_id].config(
                 state="disabled", disabledbackground=test_color,
+                font=font.nametofont("TkDefaultFont"),
                 cursor="top_left_arrow", justify="center")
+            tke_ct[test_id].unbind("<Button-1>")
 
         # Résultat attendu du test
         result = conf.work.get_expected_result(question_id, test_id)
 
-        s = tk.StringVar(tkf_test_table)
-        tke_ex_result = tk.Entry(tkf_test_table, textvariable=s)
-        tke_ex_result.grid(column=2, row=test_id+1, sticky='ew')
-
-        if test.get_hidden() <= 1:
-            s.set(result)
-            tke_ex_result.config(
+        if test.get_level() == "info":
+            tks_ex[test_id].set("test hors barème pour information")
+            tke_ex[test_id].config(
+                state="disabled", disabledbackground=test_color,
+                font=font.nametofont("TkDefaultFont"),
+                cursor="top_left_arrow", justify="center")
+            tke_ex[test_id].unbind("<Button-1>")
+        elif test.get_hidden() <= 1:
+            tks_ex[test_id].set(result)
+            tke_ex[test_id].config(
                 state="readonly", readonlybackground=test_color,
-                font=("Consolas", 10, ""), cursor="hand2")
+                font=("Consolas", 10, ""), cursor="hand2", justify="left")
             v = conf.work.get_expected_result_value(question_id, test_id)
             if isinstance(v, Exception):
-                tke_ex_result.bind("<Button-1>",
-                                   lambda e, v=v: info_exception(v))
-                tke_ex_result.config(readonlybackground="red")
+                tke_ex[test_id].bind("<Button-1>",
+                                     lambda e, v=v: info_exception(v))
+                tke_ex[test_id].config(readonlybackground="red")
             else:
-                tke_ex_result.bind("<Button-1>",
-                                   lambda e, v=v: info_value(v))
+                tke_ex[test_id].bind("<Button-1>",
+                                     lambda e, v=v: info_value(v))
         else:
-            s.set("caché")
-            tke_ex_result.config(
+            tks_ex[test_id].set("caché")
+            tke_ex[test_id].config(
                 state="disabled", disabledbackground=test_color,
+                font=font.nametofont("TkDefaultFont"),
                 cursor="top_left_arrow", justify="center")
+            tke_ex[test_id].unbind("<Button-1>")
 
-        # Résultat attendu du test
-        s = tk.StringVar(tkf_test_table)
-        tke_ob_result = tk.Entry(tkf_test_table, textvariable=s)
-        tke_ob_result.grid(column=3, row=test_id+1, sticky='ew')
-
-        if conf.work.is_answered(question_id):
-            s.set(conf.work.get_obtained_result(question_id, test_id))
-            tke_ob_result.config(
+        # Résultat obtenu du test
+        if conf.work.get_enabled_result(question_id, test_id):
+            tks_ob[test_id].set(conf.work.get_obtained_result(question_id,
+                                                              test_id))
+            tke_ob[test_id].config(
                 state="readonly", readonlybackground=test_color,
                 font=("Consolas", 10, ""), cursor="hand2")
             v = conf.work.get_obtained_result_value(question_id, test_id)
             if isinstance(v, Exception):
-                tke_ob_result.bind("<Button-1>",
-                                   lambda e, v=v: info_exception(v))
+                tke_ob[test_id].bind("<Button-1>",
+                                     lambda e, v=v: info_exception(v))
             else:
-                tke_ob_result.bind("<Button-1>",
-                                   lambda e, v=v: info_value(v))
+                std = conf.work.get_std_result(question_id, test_id)
+                v = v, std
+                tke_ob[test_id].bind("<Button-1>",
+                                     lambda e, v=v: info_value(v))
         else:
-            tke_ob_result.config(
+            tks_ob[test_id].set("")
+            tke_ob[test_id].config(
                 state="disabled", disabledbackground=test_color,
+                font=font.nametofont("TkDefaultFont"),
                 cursor="top_left_arrow")
-            tke_ob_result.unbind("<Button-1>")
+            tke_ob[test_id].unbind("<Button-1>")
+
+    for test_id in range(question.get_number_tests(), max_t):
+        tke_nbt[test_id].grid_remove()
+        tke_ct[test_id].grid_remove()
+        tke_ex[test_id].grid_remove()
+        tke_ob[test_id].grid_remove()
 
 
 show_tests(question_focus_id)
@@ -392,16 +435,29 @@ def import_work():
         tke_status_import.bind("<Button-1>",
                                lambda e, err=err: info_exception(err))
     else:
-        tke_status_import.config(state="normal", cursor="top_left_arrow")
-        tke_status_import.delete(0, "end")
-        tke_status_import.insert(0, "Pas d'erreur d'exécution")
-        tke_status_import.config(readonlybackground="green", state="readonly")
-        tke_status_import.unbind("<Button-1>")
+        std = conf.work.get_stdout()
+        if std == "":
+            tke_status_import.config(state="normal", cursor="top_left_arrow")
+            tke_status_import.delete(0, "end")
+            tke_status_import.insert(0, "Pas d'erreur d'exécution")
+            tke_status_import.config(readonlybackground="green",
+                                     state="readonly")
+            tke_status_import.unbind("<Button-1>")
+        else:
+            tke_status_import.config(state="normal", cursor="hand2")
+            tke_status_import.delete(0, "end")
+            tke_status_import.insert(0, "Pas d'erreur d'exécution. " +
+                                        "Voir l'affichage (stdout)")
+            tke_status_import.config(readonlybackground="#86FF86",
+                                     state="readonly")
+            tke_status_import.bind("<Button-1>",
+                                   lambda e, std=std: info_std(std))
     finally:
         update_view()
 
 
 def check_all():
+    conf.work.clear_all()
     import_work()
     conf.work.execute_all_tests()
     conf.work.calculate_all_points()
@@ -445,20 +501,22 @@ for i in range(conf.session.get_number_questions()):
     tkb_questions[i].config(command=lambda i=i: goto_question(i))
 
 
-def goto_last_question():
+def goto_last_question(ev=None):
     if question_focus_id > 0:
         goto_question(question_focus_id-1)
 
 
 tkb_last_question.config(command=goto_last_question)
+tk_root.bind('<Left>', goto_last_question)
 
 
-def goto_next_question():
+def goto_next_question(ev=None):
     if question_focus_id < conf.session.get_number_questions()-1:
         goto_question(question_focus_id+1)
 
 
 tkb_next_question.config(command=goto_next_question)
+tk_root.bind('<Right>', goto_next_question)
 
 
 def check_question():
